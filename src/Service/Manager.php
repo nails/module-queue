@@ -428,13 +428,12 @@ class Manager
      * @throws ModelException
      * @throws RandomException
      */
-    public function retryJob(Resource\Job $job, Throwable $error): DateTime
+    public function retryJob(Resource\Job $job, Throwable $error): Resource\Job
     {
         $nextAttempt = ($job->attempts ?? 0) + 1;
         $delay       = $this->computeBackoffSeconds($nextAttempt);
         $availableAt = $this->getTimestamp(add: new DateInterval('PT' . $delay . 'S'));
-
-        $errors = $this->appendError($job, $error);
+        $errors      = $this->appendError($job, $error);
 
         $this->jobModel->update(
             $job->id,
@@ -447,10 +446,10 @@ class Manager
                 'attempts'     => $nextAttempt,
                 'errors'       => json_encode($errors),
             ],
-            true
         );
 
-        return $availableAt;
+        /** @var Resource\Job */
+        return $this->jobModel->getById($job->id);
     }
 
     /**

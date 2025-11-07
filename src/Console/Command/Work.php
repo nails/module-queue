@@ -166,12 +166,12 @@ class Work extends Base
                         $maxRetries   = max(0, (int) $job->task::getMaxRetries());
                         $currentTries = (int) ($job->attempts ?? 0);
                         if ($currentTries < $maxRetries) {
-                            $availableAt = $this->manager->retryJob($job, $e);
-                            $logMessage  = sprintf(
+                            $this->manager->retryJob($job, $e);
+                            $logMessage = sprintf(
                                 '<comment>RETRY %d/%d</comment> (next at %s)',
                                 $currentTries + 1,
                                 $maxRetries,
-                                $availableAt->format('H:i:s')
+                                $job->available_at->format('H:i:s')
                             );
                         } else {
                             $logMessage = '<info>FAILED</info>';
