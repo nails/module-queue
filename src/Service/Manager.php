@@ -308,37 +308,34 @@ class Manager
      * @throws FactoryException
      * @throws ModelException
      */
-    public function rotateOldJobs(): array
+    public function rotateOldJobs(?int $retentionComplete = null, ?int $retentionFailed = null): array
     {
-        $jobs = [];
-
         // Determine retention windows (in days) for different terminal statuses
-        $completeDays = (int) Config::get('QUEUE_JOB_ROTATE_COMPLETE_DAYS', 7);   // default: keep 7 days, 0 to disable
-        $failedDays   = (int) Config::get('QUEUE_JOB_ROTATE_FAILED_DAYS', 30);    // default: keep 30 days, 0 to disable
+        $map = [
+            // default: keep 7 days, 0 to disable
+            [Status::COMPLETE, $retentionComplete ?? (int) Config::get('QUEUE_JOB_ROTATE_COMPLETE_DAYS', 7)],
+            // default: keep 30 days, 0 to disable
+            [Status::FAILED, $retentionFailed ?? (int) Config::get('QUEUE_JOB_ROTATE_FAILED_DAYS', 30)],
+        ];
 
-        // Rotate COMPLETE jobs older than the retention window
-        if ($completeDays > 0) {
-            $completeBoundary = $this->getTimestampString(sub: new DateInterval('P' . $completeDays . 'D'));
-            $completeJobs     = $this->jobModel->getAll([
-                new Where('status', Status::COMPLETE->value),
-                new Where('finished !=', null),
-                new Where('finished <', $completeBoundary),
-            ]);
-            if (!empty($completeJobs)) {
-                $jobs = array_merge($jobs, $completeJobs);
-            }
-        }
+        /** @var Resource\Job[] $jobs */
+        $jobs = [];
+        foreach ($map as $config) {
+            /**
+             * @var Status $status
+             * @var int    $retention
+             */
+            [$status, $retention] = $config;
 
-        // Rotate FAILED jobs older than the retention window
-        if ($failedDays > 0) {
-            $failedBoundary = $this->getTimestampString(sub: new DateInterval('P' . $failedDays . 'D'));
-            $failedJobs     = $this->jobModel->getAll([
-                new Where('status', Status::FAILED->value),
-                new Where('finished !=', null),
-                new Where('finished <', $failedBoundary),
-            ]);
-            if (!empty($failedJobs)) {
-                $jobs = array_merge($jobs, $failedJobs);
+            if ($retention > 0) {
+                $jobs = array_merge(
+                    $jobs,
+                    $this->jobModel->getAll([
+                        new Where('status', $status->value),
+                        new Where('finished !=', null),
+                        new Where('finished <', $this->getTimestampString(sub: new DateInterval('P' . $retention . 'D'))),
+                    ])
+                );
             }
         }
 
