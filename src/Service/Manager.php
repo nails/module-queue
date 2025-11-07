@@ -483,7 +483,6 @@ class Manager
                 $additional,
                 ['status' => $status->value],
             ),
-            true
         );
     }
 
