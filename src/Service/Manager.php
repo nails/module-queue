@@ -492,19 +492,7 @@ class Manager
      */
     protected function appendError(Resource\Job $job, Throwable $e): array
     {
-        $existing = [];
-        try {
-            if (!empty($job->errors)) {
-                $decoded = json_decode((string) $job->errors, true, 512, JSON_THROW_ON_ERROR);
-                if (is_array($decoded)) {
-                    $existing = $decoded;
-                }
-            }
-        } catch (\Throwable $t) {
-            // If previous value was not valid JSON, start fresh but include a marker
-            $existing = [];
-        }
-
+        $existing   = $job->errors;
         $existing[] = $this->buildErrorPayload($e);
         return $existing;
     }
