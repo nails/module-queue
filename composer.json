@@ -1,0 +1,52 @@
+{
+    "name": "nails/module-queue",
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "require": {
+        "php": "^8.2",
+        "nails/common": "dev-develop",
+        "nails/module-console": "dev-develop",
+        "nails/module-cron": "dev-develop"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "10.*",
+        "phpstan/phpstan": "2.*",
+        "nails/module-admin": "dev-develop"
+    },
+    "scripts":
+    {
+        "test": "./vendor/bin/phpunit",
+        "analyse": "./vendor/bin/phpstan analyse -c .phpstan/config.neon"
+    },
+    "autoload": {
+        "psr-4": {
+            "Nails\\Queue\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\Queue\\": "tests/"
+        }
+    },
+    "extra": {
+        "nails": {
+            "moduleName": "queue",
+            "type": "module",
+            "namespace": "Nails\\Queue\\",
+            "autoload": {
+            },
+            "data": {
+                "nails/module-admin": {
+                    "autoload": {
+                        "assets": {
+                            "js": [
+                            ],
+                            "css": [
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
