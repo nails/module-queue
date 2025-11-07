@@ -6,17 +6,22 @@ use Nails\Queue\Constants;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Class ConstantsTest
- *
- * @package Test\Phone
+ * @covers \Nails\Queue\Constants
  */
 class ConstantsTest extends TestCase
 {
-    public function test_module_slug_is_correct()
+    /**
+     * The module slug constant should match the package name.
+     */
+    public function test_module_slug_is_correct(): void
     {
-        $this->assertEquals(
-            'nails/module-queue',
-            Constants::MODULE_SLUG
-        );
+        // Arrange
+        $expected = 'nails/module-queue';
+
+        // Act
+        $actual = Constants::MODULE_SLUG;
+
+        // Assert
+        self::assertEquals($expected, $actual);
     }
 }
