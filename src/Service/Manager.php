@@ -47,7 +47,7 @@ class Manager
      */
     public function addAlias(string $alias, Queue $queue): self
     {
-        $this->aliases[$alias] = $queue;
+        $this->aliases[strtolower($alias)] = $queue;
         return $this;
     }
 
@@ -61,8 +61,8 @@ class Manager
         if ($alias instanceof Queue) {
             return $alias;
 
-        } elseif (isset($this->aliases[$alias])) {
-            return $this->aliases[$alias];
+        } elseif (isset($this->aliases[strtolower($alias)])) {
+            return $this->aliases[strtolower($alias)];
 
         } elseif (class_exists($alias)) {
             return new $alias();
