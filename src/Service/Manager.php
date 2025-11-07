@@ -4,7 +4,6 @@ namespace Nails\Queue\Service;
 
 use DateInterval;
 use DateInvalidOperationException;
-use DateMalformedIntervalStringException;
 use DateTime;
 use DateTimeInterface;
 use Exception;
@@ -53,7 +52,7 @@ class Manager
     }
 
     /**
-     * Resolves a queue by alias, instance, or fully-qualified class name and returns a Queue instance.
+     * Resolves a queue by alias, instance, or fully qualified class name and returns a Queue instance.
      *
      * @throws InvalidArgumentException
      */
@@ -148,7 +147,6 @@ class Manager
      *
      * @return Resource\Worker[]
      * @throws DateInvalidOperationException
-     * @throws DateMalformedIntervalStringException
      * @throws FactoryException
      * @throws ModelException
      * @throws Exception
@@ -176,14 +174,19 @@ class Manager
      * @throws FactoryException
      * @throws ModelException
      */
-    public function push(Task $task, Data $data, Queue|string|null $queue = null, ?DateTimeInterface $availableAt = null): Resource\Job
-    {
+    public function push(
+        Task $task,
+        Data $data,
+        Queue|string|null $queue = null,
+        ?DateTimeInterface $availableAt = null
+    ): Resource\Job {
         $queue = $queue ?? 'default';
 
         if (is_string($queue)) {
             $queue = $this->resolveQueue($queue);
         }
 
+        /** @var Resource\Job */
         return $this->jobModel->create(
             [
                 'queue'        => $queue::class,
@@ -253,6 +256,7 @@ class Manager
             return null;
         }
 
+        /** @var Resource\Job $job */
         $job = $this->jobModel->getById($row->id);
         $this->markJobAsRunning($job, $worker);
         $transaction->commit();
@@ -304,9 +308,9 @@ class Manager
      *
      * @return Resource\Job[]
      * @throws DateInvalidOperationException
-     * @throws DateMalformedIntervalStringException
      * @throws FactoryException
      * @throws ModelException
+     * @throws Exception
      */
     public function rotateOldJobs(?int $retentionComplete = null, ?int $retentionFailed = null): array
     {
@@ -423,10 +427,10 @@ class Manager
      * Returns the DateTime when the job will next be available.
      *
      * @throws DateInvalidOperationException
-     * @throws DateMalformedIntervalStringException
      * @throws FactoryException
      * @throws ModelException
      * @throws RandomException
+     * @throws Exception
      */
     public function retryJob(Resource\Job $job, Throwable $error): Resource\Job
     {
@@ -454,14 +458,14 @@ class Manager
 
     /**
      * Compute exponential backoff with jitter, capped to minutes (not hours).
-     * Base 5s, exponential factor 2, cap 5 minutes, jitter ±20%.
+     * Base 5 seconds, exponential factor 2, cap 5 minutes, jitter ±20%.
      *
      * @throws RandomException
      */
     protected function computeBackoffSeconds(int $attempt): int
     {
-        $base     = 5;        // seconds
-        $max      = 300;      // 5 minutes cap
+        $base     = 5;   // seconds
+        $max      = 300; // 5 minutes cap
         $raw      = (int) round($base * pow(2, max(0, $attempt - 1)));
         $capped   = min($raw, $max);
         $jitterPc = random_int(-20, 20) / 100; // ±20%
@@ -488,6 +492,9 @@ class Manager
 
     /**
      * Append a structured error object to the job's error array and return the updated array.
+     *
+     * @throws DateInvalidOperationException
+     * @throws FactoryException
      */
     protected function appendError(Resource\Job $job, Throwable $e): array
     {
@@ -498,6 +505,9 @@ class Manager
 
     /**
      * Build a compact error payload from a Throwable, truncating the trace to avoid large storage.
+     *
+     * @throws DateInvalidOperationException
+     * @throws FactoryException
      */
     protected function buildErrorPayload(Throwable $e): array
     {
