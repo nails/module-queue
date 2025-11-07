@@ -109,21 +109,26 @@ class Manager
      * @throws FactoryException
      * @throws ModelException
      */
-    public function touchWorker(Resource\Worker $worker): Resource\Worker
+    public function touchWorker(Resource\Worker $worker, ?int $debounce = null): Resource\Worker
     {
-        $now = $this->getTimestamp();
-        if ($now->diff($worker->heartbeat->getDateTimeObject())->s >= Config::get('QUEUE_WORKER_HEARTBEAT_DEBOUNCE', 5)) {
+        $debounce = $debounce ?? Config::get('QUEUE_WORKER_HEARTBEAT_DEBOUNCE', 5);
+        $now      = $this->getTimestamp();
+        $diff     = $now->format('U') - $worker->heartbeat->getDateTimeObject()->format('U');
+
+        if ($diff >= $debounce) {
             $this->workerModel->update(
                 $worker->id,
                 [
                     'heartbeat' => $this->getTimestampString(),
-                ],
-                true
+                ]
             );
+
+            /** @var Resource\Worker */
+            return $this->workerModel
+                ->getById($worker->id);
         }
 
-        return $this->workerModel
-            ->getById($worker->id);
+        return $worker;
     }
 
     /**
