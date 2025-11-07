@@ -7,6 +7,7 @@ use DateInvalidOperationException;
 use DateMalformedIntervalStringException;
 use DateTime;
 use DateTimeInterface;
+use Exception;
 use InvalidArgumentException;
 use Nails\Common\Exception\FactoryException;
 use Nails\Common\Exception\ModelException;
@@ -150,11 +151,13 @@ class Manager
      * @throws DateMalformedIntervalStringException
      * @throws FactoryException
      * @throws ModelException
+     * @throws Exception
      */
-    public function deleteStaleWorkers(): array
+    public function deleteStaleWorkers(?int $grace = null): array
     {
+        $grace    = $grace ?? Config::get('QUEUE_WORKER_HEARTBEAT_STALE', 300);
         $boundary = $this->getTimestampString(
-            sub: new DateInterval('PT' . Config::get('QUEUE_WORKER_HEARTBEAT_STALE', 300) . 'S')
+            sub: new DateInterval('PT' . $grace . 'S')
         );
 
         $workers = $this->workerModel->getAll([
