@@ -225,25 +225,15 @@ class Manager
                     `queue` IN (%s)
                     AND `status` = ?
                     AND `worker_id` IS NULL
-                    AND `id` = (
-                        SELECT MIN(j2.`id`) FROM `%s` j2
-                        WHERE j2.`queue` IN (%s)
-                        AND j2.`status` = ?
-                        AND j2.`worker_id` IS NULL
-                        AND j2.`available_at` <= NOW()
-                    )
+                    AND `available_at` <= NOW()
                 ORDER BY `id` ASC
                 LIMIT 1
                 FOR UPDATE SKIP LOCKED
                 EOT,
                 $table,
-                $placeholders,
-                $table,
                 $placeholders
             ),
             [
-                ...$queues,
-                Status::PENDING->value,
                 ...$queues,
                 Status::PENDING->value,
             ]
