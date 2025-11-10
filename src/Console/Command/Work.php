@@ -5,6 +5,7 @@ namespace Nails\Queue\Console\Command;
 use DateInvalidOperationException;
 use Nails\Common\Exception\FactoryException;
 use Nails\Common\Exception\ModelException;
+use Nails\Common\Factory\Logger;
 use Nails\Common\Service\Database;
 use Nails\Config;
 use Nails\Console\Command\Base;
@@ -22,6 +23,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 class Work extends Base
 {
+    protected Logger   $logger;
     protected Database $database;
     protected Manager  $manager;
     protected ?Worker  $worker = null;
@@ -33,8 +35,11 @@ class Work extends Base
     {
         parent::__construct($name);
 
+        $this->logger   = Factory::factory('Logger');
         $this->database = Factory::service('Database');
         $this->manager  = Factory::service('Manager', Constants::MODULE_SLUG);
+
+        $this->setLogFile();
     }
 
     /**
@@ -57,6 +62,48 @@ class Work extends Base
     }
 
     /**
+     * Composite logger writes to console outut as well as current log file
+     *
+     * @throws FactoryException
+     */
+    protected function log(string $line = ''): self
+    {
+        if ($this->oOutput) {
+            $this->oOutput->write($line);
+        }
+
+        if ($this->logger) {
+            $this->logger->line(
+                preg_replace(
+                    '/<\/?(info|comment|error)>/',
+                    '',
+                    sprintf('[worker:#%s] %s', $this->worker->id ?? 'no-worker', $line)
+                )
+            );
+        }
+
+        return $this;
+    }
+
+    protected function logLn(string $line = ''): self
+    {
+        return $this->log($line . PHP_EOL);
+    }
+
+    /**
+     * Sets the log file to the current date, called repeatedly in the loop to ensure the file handler moves on
+     *
+     * @throws FactoryException
+     */
+    protected function setLogFile(): self
+    {
+        /** @var \DateTime $now */
+        $now = Factory::factory('DateTime');
+        $this->logger->setFile(sprintf('queue-worker-%s.php', $now->format('Y-m-d')));
+        return $this;
+    }
+
+    /**
      * @throws DateInvalidOperationException
      * @throws FactoryException
      * @throws ModelException
@@ -71,21 +118,21 @@ class Work extends Base
         $queues       = $this->resolveQueues();
         $this->worker = $this->manager->registerWorker($queues);
 
-        $oOutput->writeln('Worker ID:');
-        $oOutput->writeln(sprintf(
+        $this->logln('Worker ID:');
+        $this->logln(sprintf(
             '<info>#%s</info>:<info>%s</info>',
             $this->worker->id,
             $this->worker->token
         ));
 
-        $oOutput->writeln('Working queues:');
+        $this->logln('Working queues:');
         foreach ($queues as $queue) {
-            $oOutput->writeln('<info>' . $queue::class . '</info>');
+            $this->logln('<info>' . $queue::class . '</info>');
         }
 
-        $oOutput->writeln('Running Setup:');
+        $this->logln('Running Setup:');
         foreach ($queues as $queue) {
-            $this->oOutput->write('<info>' . $queue::class . '</info> ... ');
+            $this->log('<info>' . $queue::class . '</info> ... ');
             $setupTimerStart = microtime(true);
             try {
 
@@ -144,7 +191,7 @@ class Work extends Base
             $lastRefresh[$q] = $now;
         }
 
-        $this->oOutput->writeln('Waiting for jobs:');
+        $this->logln('Waiting for jobs:');
         while (true) {
             $job = null;
             try {
@@ -193,16 +240,12 @@ class Work extends Base
                 } else {
                     // Sleep with jitter to reduce thundering herd
                     $sleepTime = ($waitTime + random_int(0, 200));
-                    $this->oOutput->writeln(
-                        sprintf('No work, sleeping for %sms', $sleepTime),
-                        OutputInterface::VERBOSITY_DEBUG
-                    );
                     usleep($sleepTime * 1000);
                     $waitTime = min($waitTime * 2, 5000);
                 }
 
             } catch (\Throwable $e) {
-                $this->oOutput->writeln(sprintf(
+                $this->logln(sprintf(
                     '<error>Error: %s</error>',
                     $e->getMessage()
                 ));
@@ -215,7 +258,7 @@ class Work extends Base
                 $now = time();
                 foreach ($queueClasses as $q) {
                     if (($now - ($lastRefresh[$q] ?? 0)) >= $refreshInterval) {
-                        $this->oOutput->write(sprintf('<comment>Refreshing</comment> <info>%s</info> ... ', $q));
+                        $this->log(sprintf('<comment>Refreshing</comment> <info>%s</info> ... ', $q));
                         $refreshTimerStart = microtime(true);
                         try {
 
@@ -224,6 +267,9 @@ class Work extends Base
                                 '<info>done</info>',
                                 $refreshTimerStart
                             );
+
+                            //  Take the opportunity to refresh the log file path
+                            $this->setLogFile();
 
                         } catch (\Throwable $e) {
                             $this->logStringWithTimer(
@@ -243,7 +289,7 @@ class Work extends Base
 
     protected function jobLog(Job $job, string $message): void
     {
-        $this->oOutput->writeln(
+        $this->logln(
             sprintf(
                 '[<comment>%s</comment>:#<comment>%s</comment>] ......... %s',
                 $job->task::class,
@@ -255,7 +301,7 @@ class Work extends Base
 
     protected function logStringWithTimer(string $message, $timerStart): void
     {
-        $this->oOutput->writeln(sprintf(
+        $this->logln(sprintf(
             '%s [<comment>%ss</comment>]',
             $message,
             round(microtime(true) - $timerStart, 4)
