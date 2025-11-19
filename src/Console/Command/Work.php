@@ -27,7 +27,8 @@ class Work extends Base implements SignalableCommandInterface
     protected Logger   $logger;
     protected Database $database;
     protected Manager  $manager;
-    protected ?Worker  $worker = null;
+    protected ?Worker  $worker            = null;
+    protected bool     $shutdownRequested = false;
 
     /**
      * @throws FactoryException
@@ -49,9 +50,7 @@ class Work extends Base implements SignalableCommandInterface
      */
     public function __destruct()
     {
-        if ($this->worker) {
-            $this->manager->unregisterWorker($this->worker);
-        }
+        $this->unregisterWorker();
     }
 
     public function getSubscribedSignals(): array
@@ -64,12 +63,21 @@ class Work extends Base implements SignalableCommandInterface
 
     public function handleSignal(int $signal): int|false
     {
-        if (in_array($signal, $this->getSubscribedSignals()) && $this->worker) {
+        if (in_array($signal, $this->getSubscribedSignals(), true)) {
+            $this->shutdownRequested = true;
+            $this->logLn('<comment>Signal received</comment>: requesting graceful shutdown...');
+        }
+        //  False returns allows command to continue and gracefully shut down itself
+        return false;
+    }
+
+    protected function unregisterWorker(): void
+    {
+        if ($this->worker) {
+            $this->logLn('<comment>Shutdown</comment>: Unregistering worker');
             $this->manager->unregisterWorker($this->worker);
             $this->worker = null;
         }
-
-        return self::EXIT_CODE_SUCCESS;
     }
 
     protected function configure()
@@ -170,6 +178,7 @@ class Work extends Base implements SignalableCommandInterface
         }
 
         $this->startEventLoop($queues);
+        $this->unregisterWorker();
 
         return static::EXIT_CODE_SUCCESS;
     }
@@ -211,7 +220,7 @@ class Work extends Base implements SignalableCommandInterface
         }
 
         $this->logln('Waiting for jobs:');
-        while (true) {
+        while ($this->runLoop()) {
             $job = null;
             try {
 
@@ -258,9 +267,13 @@ class Work extends Base implements SignalableCommandInterface
 
                 } else {
                     // Sleep with jitter to reduce thundering herd
-                    $sleepTime = ($waitTime + random_int(0, 200));
-                    usleep($sleepTime * 1000);
-                    $waitTime = min($waitTime * 2, 5000);
+                    // Chunked to catch signals more quickly
+                    $remainingMs = $waitTime + random_int(0, 200);
+                    while ($remainingMs > 0 && !$this->shutdownRequested) {
+                        $chunk = min(100, $remainingMs); // 100ms chunks
+                        usleep($chunk * 1000);
+                        $remainingMs -= $chunk;
+                    }
                 }
 
             } catch (\Throwable $e) {
@@ -304,6 +317,15 @@ class Work extends Base implements SignalableCommandInterface
                 $this->database->flushCache();
             }
         }
+    }
+
+    protected function runLoop(): bool
+    {
+        if ($this->shutdownRequested) {
+            $this->logLn('<comment>Shutdown</comment>: Stopping job loop');
+            return false;
+        }
+        return true;
     }
 
     protected function jobLog(Job $job, string $message): void
