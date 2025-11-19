@@ -13,8 +13,7 @@
         "phpstan/phpstan": "2.*",
         "nails/module-admin": "dev-develop"
     },
-    "scripts":
-    {
+    "scripts": {
         "test": "./vendor/bin/phpunit",
         "analyse": "./vendor/bin/phpstan analyse -c .phpstan/config.neon"
     },
@@ -27,6 +26,9 @@
         "psr-4": {
             "Tests\\Queue\\": "tests/"
         }
+    },
+    "suggest": {
+        "ext-pcntl": "Required for graceful signal handling in console commands."
     },
     "extra": {
         "nails": {

@@ -17,11 +17,12 @@ use Nails\Queue\Resource\Job;
 use Nails\Queue\Resource\Worker;
 use Nails\Queue\Service\Manager;
 use Random\RandomException;
+use Symfony\Component\Console\Command\SignalableCommandInterface;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
-class Work extends Base
+class Work extends Base implements SignalableCommandInterface
 {
     protected Logger   $logger;
     protected Database $database;
@@ -51,6 +52,24 @@ class Work extends Base
         if ($this->worker) {
             $this->manager->unregisterWorker($this->worker);
         }
+    }
+
+    public function getSubscribedSignals(): array
+    {
+        return extension_loaded('pcntl') ? [
+            SIGINT,
+            SIGTERM,
+        ] : [];
+    }
+
+    public function handleSignal(int $signal): int|false
+    {
+        if (in_array($signal, $this->getSubscribedSignals()) && $this->worker) {
+            $this->manager->unregisterWorker($this->worker);
+            $this->worker = null;
+        }
+
+        return self::EXIT_CODE_SUCCESS;
     }
 
     protected function configure()
