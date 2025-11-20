@@ -2,6 +2,7 @@
 
 namespace Nails\Queue\Resource;
 
+use Nails\Common\Exception\FactoryException;
 use Nails\Common\Model\Base;
 use Nails\Common\Resource\DateTime;
 use Nails\Common\Resource\Entity;
@@ -15,6 +16,9 @@ class Worker extends Entity
     public array    $queues;
     public DateTime $heartbeat;
 
+    /**
+     * @throws FactoryException
+     */
     public function __construct(array|Entity|stdClass $resource = [], ?Base $model = null)
     {
         $resource->queues    = json_decode($resource->queues);
@@ -22,6 +26,9 @@ class Worker extends Entity
         parent::__construct($resource, $model);
     }
 
+    /**
+     * @throws FactoryException
+     */
     public function isStale(): bool
     {
         /** @var \DateTime $now */

@@ -6,6 +6,8 @@ use Nails\Common\Model\Base as BaseModel;
 use Nails\Queue\Constants;
 use Nails\Queue\Model\Worker;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
+use ReflectionMethod;
 
 /**
  * @covers \Nails\Queue\Model\Worker
@@ -34,7 +36,7 @@ class WorkerModelTest extends TestCase
     public function test_caching_is_disabled(): void
     {
         // Arrange
-        $reflection = new \ReflectionClass(Worker::class);
+        $reflection = new ReflectionClass(Worker::class);
 
         // Act
         $property = $reflection->getProperty('CACHING_ENABLED');
@@ -57,7 +59,7 @@ class WorkerModelTest extends TestCase
             ->getMock();
 
         // Act
-        $constructorMethod = new \ReflectionMethod(Worker::class, '__construct');
+        $constructorMethod = new ReflectionMethod(Worker::class, '__construct');
         $constructorMethod->invoke($model);
         $fields    = $model->getExpandableFields();
         $jobsField = null;
