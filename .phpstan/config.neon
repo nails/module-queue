@@ -5,3 +5,6 @@ parameters:
         - ../tests
     bootstrapFiles:
         - constants.php
+    scanDirectories:
+        - ../vendor/nails/module-admin
+        - ../vendor/nails/module-api
