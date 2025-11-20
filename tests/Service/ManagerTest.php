@@ -7,7 +7,9 @@ use DateTime;
 use Exception;
 use InvalidArgumentException;
 use Nails\Common\Factory\Database\Transaction;
+use Nails\Common\Helper\Model\Condition;
 use Nails\Common\Helper\Model\Where;
+use Nails\Common\Helper\Model\WhereIn;
 use Nails\Common\Service\Database;
 use Nails\Queue\Enum\Job\Status;
 use Nails\Queue\Factory\Data as DataFactory;
@@ -109,8 +111,23 @@ class ManagerTest extends TestCase
         return new ManagerStub($database, $workerModel, $jobModel, $now, $backoffSeconds);
     }
 
+    /**
+     * addAlias: registers a new alias and can resolve it case-insensitively.
+     *
+     * @covers \Nails\Queue\Service\Manager::addAlias
+     * @covers \Nails\Queue\Service\Manager::resolveQueue
+     */
+    public function test_add_alias_registers_and_resolves(): void
+    {
+        // Arrange
+        $manager = $this->makeManager();
 
-    //  @todo (Pablo 2025-11-07) - test addAlias()
+        // Act
+        $manager->addAlias('foo', new PriorityQueue());
+
+        // Assert
+        self::assertInstanceOf(PriorityQueue::class, $manager->resolveQueue('FOO'));
+    }
 
     /**
      * resolveQueue: supports the built-in 'default' alias.
@@ -656,6 +673,83 @@ class ManagerTest extends TestCase
     }
 
     /**
+     * getNextJob: returns null when no matching job is found.
+     *
+     * @covers \Nails\Queue\Service\Manager::getNextJob
+     */
+    public function test_get_next_job_returns_null_when_no_rows()
+    {
+        // Arrange
+        /** @var Database&MockObject $database */
+        $database = $this->makeMock(
+            class: Database::class,
+            onlyMethods: [
+                'transaction',
+            ],
+            addMethods: [
+                'query',
+            ],
+        );
+
+        /** @var Transaction&MockObject $transaction */
+        $transaction = $this->makeMock(
+            class: Transaction::class,
+            onlyMethods: [
+                'start',
+                'commit',
+            ],
+        );
+
+        $transaction
+            ->expects($this->once())
+            ->method('start')
+            ->willReturnSelf();
+
+        $transaction
+            ->expects($this->once())
+            ->method('commit')
+            ->willReturnSelf();
+
+        $database
+            ->method('transaction')
+            ->willReturn($transaction);
+
+        // Mock result of query->row() to return null/empty
+        $database
+            ->expects($this->once())
+            ->method('query')
+            ->willReturn(
+                new class {
+                    public function row()
+                    {
+                        return null;
+                    }
+                }
+            );
+
+        /** @var JobModel&MockObject $jobModel */
+        $jobModel = $this->makeMock(
+            class: JobModel::class,
+            onlyMethods: [
+                'getTableName',
+            ]
+        );
+
+        $jobModel
+            ->method('getTableName')
+            ->willReturn('nails_queue_job');
+
+        $manager = $this->makeManager(database: $database, jobModel: $jobModel);
+        $worker  = $this->makeWorkerResource(['id' => 55]);
+
+        // Act
+        $job = $manager->getNextJob([DefaultQueue::class], $worker);
+
+        // Assert
+        self::assertNull($job);
+    }
+
+    /**
      * markJobAsComplete: updates status to COMPLETE and sets finished timestamp.
      *
      * @covers \Nails\Queue\Service\Manager::markJobAsComplete
@@ -1025,12 +1119,577 @@ class ManagerTest extends TestCase
         sort($ids);
         self::assertSame($uniqueOldJobsIds, $ids);
     }
-}
 
-//  @todo (Pablo 2025-11-19) - getQueues
-//  @todo (Pablo 2025-11-19) - countJobs
-//  @todo (Pablo 2025-11-19) - countPendingJobs
-//  @todo (Pablo 2025-11-19) - countScheduledJobs
-//  @todo (Pablo 2025-11-19) - countRunningJobs
-//  @todo (Pablo 2025-11-19) - countCompleteJobs
-//  @todo (Pablo 2025-11-19) - countFailedJobs
+    /**
+     * getQueues: discovers built-in queues in this module.
+     *
+     * @covers \Nails\Queue\Service\Manager::getQueues
+     */
+    public function test_get_queues_discovers_builtin_queues(): void
+    {
+        // Arrange
+        $manager = $this->makeManager();
+
+        // Act
+        $queues = $manager->getQueues();
+
+        // Assert
+        self::assertIsArray($queues);
+        self::assertNotEmpty($queues);
+        $classes = array_map(fn($q) => $q::class, $queues);
+        self::assertContains(DefaultQueue::class, $classes);
+        self::assertContains(PriorityQueue::class, $classes);
+    }
+
+    /**
+     * countJobs: applies WhereIn filters for queues, tasks, and statuses.
+     *
+     * @covers \Nails\Queue\Service\Manager::countJobs
+     */
+    public function test_count_jobs_applies_filters(): void
+    {
+        // Arrange
+        /** @var JobModel&MockObject $jobModel */
+        $jobModel = $this->makeMock(
+            class: JobModel::class,
+            onlyMethods: [
+                'countAll',
+            ]
+        );
+
+        $jobModel
+            ->expects($this->once())
+            ->method('countAll')
+            ->with(
+                $this->callback(function (array $data) {
+                    $found = [
+                        'queue'  => null,
+                        'task'   => null,
+                        'status' => null,
+                    ];
+
+                    foreach ($data as $d) {
+                        if ($d instanceof WhereIn) {
+                            [$column, $values] = $d->compile();
+                            if ($column === 'queue') {
+                                $found['queue'] = $values;
+                            } elseif ($column === 'task') {
+                                $found['task'] = $values;
+                            } elseif ($column === 'status') {
+                                $found['status'] = $values;
+                            }
+                        }
+                    }
+
+                    // Queues should include resolved class names
+                    $queueOk = is_array($found['queue'])
+                        && in_array(DefaultQueue::class, $found['queue'], true)
+                        && in_array(PriorityQueue::class, $found['queue'], true);
+
+                    $taskOk = is_array($found['task'])
+                        && $found['task'] === [DoNothingTask::class];
+
+                    $statusOk = is_array($found['status'])
+                        && in_array(Status::PENDING->value, $found['status'], true)
+                        && in_array(Status::FAILED->value, $found['status'], true);
+
+                    return $queueOk && $taskOk && $statusOk;
+                }),
+                $this->anything()
+            )
+            ->willReturn(7);
+
+        $manager = $this->makeManager(jobModel: $jobModel);
+
+        // Act
+        $count = $manager->countJobs(
+            data: [],
+            queues: ['default', new PriorityQueue(), DefaultQueue::class],
+            tasks: [DoNothingTask::class],
+            statuses: [Status::PENDING, Status::FAILED]
+        );
+
+        // Assert
+        self::assertSame(7, $count);
+    }
+
+    /**
+     * countPendingJobs: adds availability condition and PENDING status.
+     *
+     * @covers \Nails\Queue\Service\Manager::countPendingJobs
+     */
+    public function test_count_pending_jobs_adds_condition_and_status(): void
+    {
+        // Arrange
+        /** @var JobModel&MockObject $jobModel */
+        $jobModel = $this->makeMock(
+            class: JobModel::class,
+            onlyMethods: [
+                'countAll',
+            ]
+        );
+
+        $jobModel
+            ->expects($this->once())
+            ->method('countAll')
+            ->with(
+                $this->callback(function (array $data) {
+                    $hasCondition = false;
+                    $hasStatus    = false;
+                    foreach ($data as $d) {
+                        if ($d instanceof Condition) {
+                            // Accept any Condition instance; SQL string may vary by implementation
+                            $hasCondition = true;
+                        }
+                        if ($d instanceof WhereIn) {
+                            [$column, $values] = $d->compile();
+                            if ($column === 'status' && $values === [Status::PENDING->value]) {
+                                $hasStatus = true;
+                            }
+                        }
+                    }
+                    return $hasCondition && $hasStatus;
+                }),
+                $this->anything()
+            )
+            ->willReturn(4);
+
+        $manager = $this->makeManager(jobModel: $jobModel);
+
+        // Act
+        $count = $manager->countPendingJobs();
+
+        // Assert
+        self::assertSame(4, $count);
+    }
+
+    /**
+     * countScheduledJobs: adds future-availability condition and PENDING status.
+     *
+     * @covers \Nails\Queue\Service\Manager::countScheduledJobs
+     */
+    public function test_count_scheduled_jobs_adds_condition_and_status(): void
+    {
+        // Arrange
+        /** @var JobModel&MockObject $jobModel */
+        $jobModel = $this->makeMock(
+            class: JobModel::class,
+            onlyMethods: [
+                'countAll',
+            ]
+        );
+
+        $jobModel
+            ->expects($this->once())
+            ->method('countAll')
+            ->with(
+                $this->callback(function (array $data) {
+                    $hasCondition = false;
+                    $hasStatus    = false;
+                    foreach ($data as $d) {
+                        if ($d instanceof Condition) {
+                            // Accept any Condition instance; SQL string may vary by implementation
+                            $hasCondition = true;
+                        }
+                        if ($d instanceof WhereIn) {
+                            [$column, $values] = $d->compile();
+                            if ($column === 'status' && $values === [Status::PENDING->value]) {
+                                $hasStatus = true;
+                            }
+                        }
+                    }
+                    return $hasCondition && $hasStatus;
+                }),
+                $this->anything()
+            )
+            ->willReturn(3);
+
+        $manager = $this->makeManager(jobModel: $jobModel);
+
+        // Act
+        $count = $manager->countScheduledJobs();
+
+        // Assert
+        self::assertSame(3, $count);
+    }
+
+    /**
+     * countRunningJobs: filters by RUNNING status.
+     *
+     * @covers \Nails\Queue\Service\Manager::countRunningJobs
+     */
+    public function test_count_running_jobs_filters_status(): void
+    {
+        // Arrange
+        /** @var JobModel&MockObject $jobModel */
+        $jobModel = $this->makeMock(
+            class: JobModel::class,
+            onlyMethods: [
+                'countAll',
+            ]
+        );
+
+        $jobModel
+            ->expects($this->once())
+            ->method('countAll')
+            ->with(
+                $this->callback(function (array $data) {
+                    foreach ($data as $d) {
+                        if ($d instanceof WhereIn) {
+                            [$column, $values] = $d->compile();
+                            if ($column === 'status') {
+                                return $values === [Status::RUNNING->value];
+                            }
+                        }
+                    }
+                    return false;
+                }),
+                $this->anything()
+            )
+            ->willReturn(5);
+
+        $manager = $this->makeManager(jobModel: $jobModel);
+
+        // Act
+        $count = $manager->countRunningJobs();
+
+        // Assert
+        self::assertSame(5, $count);
+    }
+
+    /**
+     * countCompleteJobs: filters by COMPLETE status.
+     *
+     * @covers \Nails\Queue\Service\Manager::countCompleteJobs
+     */
+    public function test_count_complete_jobs_filters_status(): void
+    {
+        // Arrange
+        /** @var JobModel&MockObject $jobModel */
+        $jobModel = $this->makeMock(
+            class: JobModel::class,
+            onlyMethods: [
+                'countAll',
+            ]
+        );
+
+        $jobModel
+            ->expects($this->once())
+            ->method('countAll')
+            ->with(
+                $this->callback(function (array $data) {
+                    foreach ($data as $d) {
+                        if ($d instanceof WhereIn) {
+                            [$column, $values] = $d->compile();
+                            if ($column === 'status') {
+                                return $values === [Status::COMPLETE->value];
+                            }
+                        }
+                    }
+                    return false;
+                }),
+                $this->anything()
+            )
+            ->willReturn(9);
+
+        $manager = $this->makeManager(jobModel: $jobModel);
+
+        // Act
+        $count = $manager->countCompleteJobs();
+
+        // Assert
+        self::assertSame(9, $count);
+    }
+
+    /**
+     * countFailedJobs: filters by FAILED status.
+     *
+     * @covers \Nails\Queue\Service\Manager::countFailedJobs
+     */
+    public function test_count_failed_jobs_filters_status(): void
+    {
+        // Arrange
+        /** @var JobModel&MockObject $jobModel */
+        $jobModel = $this->makeMock(
+            class: JobModel::class,
+            onlyMethods: [
+                'countAll',
+            ]
+        );
+
+        $jobModel
+            ->expects($this->once())
+            ->method('countAll')
+            ->with(
+                $this->callback(function (array $data) {
+                    foreach ($data as $d) {
+                        if ($d instanceof WhereIn) {
+                            [$column, $values] = $d->compile();
+                            if ($column === 'status') {
+                                return $values === [Status::FAILED->value];
+                            }
+                        }
+                    }
+                    return false;
+                }),
+                $this->anything()
+            )
+            ->willReturn(2);
+
+        $manager = $this->makeManager(jobModel: $jobModel);
+
+        // Act
+        $count = $manager->countFailedJobs();
+
+        // Assert
+        self::assertSame(2, $count);
+    }
+
+    /**
+     * markJobAsRunning: sets RUNNING, assigns worker_id, and sets started timestamp.
+     *
+     * @covers \Nails\Queue\Service\Manager::markJobAsRunning
+     */
+    public function test_mark_job_as_running_sets_status_worker_and_started(): void
+    {
+        // Arrange
+        /** @var JobModel&MockObject $jobModel */
+        $jobModel = $this->makeMock(
+            class: JobModel::class,
+            onlyMethods: [
+                'update',
+            ],
+        );
+
+        $job    = $this->makeJobResource(['id' => 99]);
+        $worker = $this->makeWorkerResource(['id' => 7]);
+
+        $jobModel
+            ->expects($this->once())
+            ->method('update')
+            ->with(
+                99,
+                $this->callback(function (array $data) use ($worker) {
+                    return $data['status'] === Status::RUNNING->value
+                        && ($data['worker_id'] ?? null) === $worker->id
+                        && isset($data['started']);
+                }),
+            )
+            ->willReturn(true);
+
+        $manager = $this->makeManager(jobModel: $jobModel);
+
+        // Act
+        $ok = $manager->markJobAsRunning($job, $worker);
+
+        // Assert
+        self::assertTrue($ok);
+    }
+
+    /**
+     * getQueueAverageLatency: parameterization (queues + window) and float casting.
+     *
+     * @covers \Nails\Queue\Service\Manager::getQueueAverageLatency
+     */
+    public function test_get_queue_average_latency_parametrizes_and_casts_float(): void
+    {
+        // Arrange
+        $interval = new DateInterval('PT1H');
+        $now      = new DateTime('2025-01-01 00:00:00');
+        $then     = (clone $now)->sub($interval);
+
+        /** @var Database&MockObject $db */
+        $db = $this->makeMock(
+            class: Database::class,
+            onlyMethods: [],
+            addMethods: [
+                'query',
+            ],
+        );
+
+        $result = new class {
+            public function first_row()
+            {
+                return (object) ['latency' => '12.5'];
+            }
+        };
+
+        $db
+            ->expects($this->once())
+            ->method('query')
+            ->with(
+                $this->isType('string'),
+                $this->callback(function (array $args) use ($then, $now) {
+                    // Last two args must be then and now
+                    $end    = array_pop($args); // now
+                    $start  = array_pop($args); // then
+                    $queues = $args; // remaining are queues
+
+                    $timesOk  = $start === $then->format('Y-m-d H:i:s')
+                        && $end === $now->format('Y-m-d H:i:s');
+                    $queuesOk = count($queues) >= 1 && array_reduce($queues, function ($ok, $q) {
+                            return $ok && is_string($q);
+                        }, true);
+
+                    return $timesOk && $queuesOk;
+                })
+            )
+            ->willReturn($result);
+
+        /** @var JobModel&MockObject $jobModel */
+        $jobModel = $this->makeMock(JobModel::class, onlyMethods: ['getTableName']);
+        $jobModel->method('getTableName')->willReturn('nails_queue_job');
+
+        $manager = $this->makeManager(database: $db, jobModel: $jobModel, now: $now);
+
+        // Act
+        $value = $manager->getQueueAverageLatency($interval);
+
+        // Assert
+        self::assertSame(12.5, $value);
+    }
+
+    /**
+     * getQueueAverageDuration: parameterization (queues + statuses + window) and float casting.
+     *
+     * @covers \Nails\Queue\Service\Manager::getQueueAverageDuration
+     */
+    public function test_get_queue_average_duration_parametrizes_and_casts_float(): void
+    {
+        // Arrange
+        $interval = new DateInterval('PT30M');
+        $now      = new DateTime('2025-01-01 00:00:00');
+        $then     = (clone $now)->sub($interval);
+
+        /** @var Database&MockObject $db */
+        $db = $this->makeMock(
+            class: Database::class,
+            onlyMethods: [],
+            addMethods: [
+                'query',
+            ],
+        );
+
+        $result = new class {
+            public function first_row()
+            {
+                return (object) ['duration' => 3.75];
+            }
+        };
+
+        $db
+            ->expects($this->once())
+            ->method('query')
+            ->with(
+                $this->isType('string'),
+                $this->callback(function (array $args) use ($then, $now) {
+                    // Expect tail: [COMPLETE, FAILED, then, now]
+                    $tail     = array_slice($args, -4);
+                    $statuses = array_slice($tail, 0, 2);
+                    $start    = $tail[2];
+                    $end      = $tail[3];
+
+                    $timesOk = $start === $then->format('Y-m-d H:i:s')
+                        && $end === $now->format('Y-m-d H:i:s');
+
+                    $statusOk = $statuses === [
+                            Status::COMPLETE->value,
+                            Status::FAILED->value,
+                        ];
+
+                    // Ensure there is at least one queue arg before statuses
+                    $queues   = array_slice($args, 0, count($args) - 4);
+                    $queuesOk = count($queues) >= 1 && array_reduce($queues, function ($ok, $q) {
+                            return $ok && is_string($q);
+                        }, true);
+
+                    return $timesOk && $statusOk && $queuesOk;
+                })
+            )
+            ->willReturn($result);
+
+        /** @var JobModel&MockObject $jobModel */
+        $jobModel = $this->makeMock(JobModel::class, onlyMethods: ['getTableName']);
+        $jobModel->method('getTableName')->willReturn('nails_queue_job');
+
+        $manager = $this->makeManager(database: $db, jobModel: $jobModel, now: $now);
+
+        // Act
+        $value = $manager->getQueueAverageDuration($interval);
+
+        // Assert
+        self::assertSame(3.75, $value);
+    }
+
+    /**
+     * getQueueThroughput: parameterization (queues + statuses + window) and int casting.
+     *
+     * @covers \Nails\Queue\Service\Manager::getQueueThroughput
+     */
+    public function test_get_queue_throughput_parametrizes_and_casts_int(): void
+    {
+        // Arrange
+        $interval = new DateInterval('P1D');
+        $now      = new DateTime('2025-01-01 00:00:00');
+        $then     = (clone $now)->sub($interval);
+
+        /** @var Database&MockObject $db */
+        $db = $this->makeMock(
+            class: Database::class,
+            onlyMethods: [],
+            addMethods: [
+                'query',
+            ],
+        );
+
+        $result = new class {
+            public function first_row()
+            {
+                return (object) ['count' => '17'];
+            }
+        };
+
+        $db
+            ->expects($this->once())
+            ->method('query')
+            ->with(
+                $this->isType('string'),
+                $this->callback(function (array $args) use ($then, $now) {
+                    // Expect tail: [COMPLETE, FAILED, then, now]
+                    $tail     = array_slice($args, -4);
+                    $statuses = array_slice($tail, 0, 2);
+                    $start    = $tail[2];
+                    $end      = $tail[3];
+
+                    $timesOk = $start === $then->format('Y-m-d H:i:s')
+                        && $end === $now->format('Y-m-d H:i:s');
+
+                    $statusOk = $statuses === [
+                            Status::COMPLETE->value,
+                            Status::FAILED->value,
+                        ];
+
+                    // Ensure there is at least one queue arg before statuses
+                    $queues   = array_slice($args, 0, count($args) - 4);
+                    $queuesOk = count($queues) >= 1 && array_reduce($queues, function ($ok, $q) {
+                            return $ok && is_string($q);
+                        }, true);
+
+                    return $timesOk && $statusOk && $queuesOk;
+                })
+            )
+            ->willReturn($result);
+
+        /** @var JobModel&MockObject $jobModel */
+        $jobModel = $this->makeMock(JobModel::class, onlyMethods: ['getTableName']);
+        $jobModel->method('getTableName')->willReturn('nails_queue_job');
+
+        $manager = $this->makeManager(database: $db, jobModel: $jobModel, now: $now);
+
+        // Act
+        $value = $manager->getQueueThroughput($interval);
+
+        // Assert
+        self::assertSame(17, $value);
+    }
+}
