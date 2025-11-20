@@ -12,7 +12,7 @@ class DoNothing implements Task
         return 0;
     }
 
-    function run(Data $data): void
+    public function run(Data $data): void
     {
         //  Silence is golden
     }
