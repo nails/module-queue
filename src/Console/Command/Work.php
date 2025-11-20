@@ -65,7 +65,7 @@ class Work extends Base implements SignalableCommandInterface
     {
         if (in_array($signal, $this->getSubscribedSignals(), true)) {
             $this->shutdownRequested = true;
-            $this->logLn('<comment>Signal received</comment>: requesting graceful shutdown...');
+            $this->logln('<comment>Signal received</comment>: requesting graceful shutdown...');
         }
         //  False returns allows command to continue and gracefully shut down itself
         return false;
@@ -74,7 +74,7 @@ class Work extends Base implements SignalableCommandInterface
     protected function unregisterWorker(): void
     {
         if ($this->worker) {
-            $this->logLn('<comment>Shutdown</comment>: Unregistering worker');
+            $this->logln('<comment>Shutdown</comment>: Unregistering worker');
             $this->manager->unregisterWorker($this->worker);
             $this->worker = null;
         }
@@ -112,7 +112,7 @@ class Work extends Base implements SignalableCommandInterface
         return $this;
     }
 
-    protected function logLn(string $line = ''): self
+    protected function logln(string $line = ''): self
     {
         return $this->log($line . PHP_EOL);
     }
@@ -322,7 +322,7 @@ class Work extends Base implements SignalableCommandInterface
     protected function runLoop(): bool
     {
         if ($this->shutdownRequested) {
-            $this->logLn('<comment>Shutdown</comment>: Stopping job loop');
+            $this->logln('<comment>Shutdown</comment>: Stopping job loop');
             return false;
         }
         return true;
