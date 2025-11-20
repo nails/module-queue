@@ -21,5 +21,5 @@ interface Data
     /**
      * Returns JSON representation of the data, used to persist the data to the database
      */
-    public function toJson(): string;
+    public function toJson(int $jsonFlags = 0): string;
 }

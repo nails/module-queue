@@ -4,7 +4,7 @@ namespace Tests\Queue\Resource;
 
 use Nails\Queue\Enum\Job\Status;
 use Nails\Queue\Factory\Data as DataFactory;
-use Nails\Queue\Queues\DefaultQueue;
+use Nails\Queue\Queue\Queues\DefaultQueue;
 use Nails\Queue\Resource\Job as JobResource;
 use Nails\Queue\Tasks\DoNothing as DoNothingTask;
 use PHPUnit\Framework\TestCase;

@@ -11,8 +11,8 @@ use Nails\Queue\Enum\Job\Status;
 use Nails\Queue\Factory\Data as DataFactory;
 use Nails\Queue\Model\Job as JobModel;
 use Nails\Queue\Model\Worker as WorkerModel;
-use Nails\Queue\Queues\DefaultQueue;
-use Nails\Queue\Queues\PriorityQueue;
+use Nails\Queue\Queue\Queues\DefaultQueue;
+use Nails\Queue\Queue\Queues\PriorityQueue;
 use Nails\Queue\Resource\Job as JobResource;
 use Nails\Queue\Resource\Worker as WorkerResource;
 use Nails\Queue\Service\Manager;
@@ -1024,3 +1024,11 @@ class ManagerTest extends TestCase
         self::assertSame($uniqueOldJobsIds, $ids);
     }
 }
+
+//  @todo (Pablo 2025-11-19) - getQueues
+//  @todo (Pablo 2025-11-19) - countJobs
+//  @todo (Pablo 2025-11-19) - countPendingJobs
+//  @todo (Pablo 2025-11-19) - countScheduledJobs
+//  @todo (Pablo 2025-11-19) - countRunningJobs
+//  @todo (Pablo 2025-11-19) - countCompleteJobs
+//  @todo (Pablo 2025-11-19) - countFailedJobs

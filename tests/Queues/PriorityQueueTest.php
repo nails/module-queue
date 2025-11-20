@@ -3,11 +3,11 @@
 namespace Tests\Queue\Queues;
 
 use Nails\Queue\Interface\Queue as QueueInterface;
-use Nails\Queue\Queues\PriorityQueue;
+use Nails\Queue\Queue\Queues\PriorityQueue;
 use PHPUnit\Framework\TestCase;
 
 /**
- * @covers \Nails\Queue\Queues\PriorityQueue
+ * @covers \Nails\Queue\Queue\Queues\PriorityQueue
  */
 class PriorityQueueTest extends TestCase
 {

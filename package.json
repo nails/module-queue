@@ -1,0 +1,31 @@
+{
+    "name": "nails-module-queue",
+    "description": "This is the \"Queue\" module for Nails.",
+    "author": "hello@nailsapp.co.uk",
+    "analyze": true,
+    "license": "MIT",
+    "repository": "https://github.com/nails/module-queue",
+    "devDependencies": {
+        "autoprefixer": "^10.4",
+        "css-loader": "^7.1",
+        "mini-css-extract-plugin": "^2.6",
+        "postcss-loader": "^8.2",
+        "sass": "^1.54",
+        "sass-loader": "^16.0",
+        "webpack": "^5.74",
+        "webpack-cli": "^6.0"
+    },
+    "scripts": {
+        "build": "webpack",
+        "watch": "webpack --watch"
+    },
+    "dependencies": {
+        "axios": "^1.8",
+        "lodash": "^4.17",
+        "vue": "^3.0",
+        "vue-loader": "^17.4"
+    },
+    "peerDependencies": {
+        "vue": "^3.0"
+    }
+}

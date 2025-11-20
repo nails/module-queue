@@ -3,11 +3,11 @@
 namespace Tests\Queue\Queues;
 
 use Nails\Queue\Interface\Queue as QueueInterface;
-use Nails\Queue\Queues\DefaultQueue;
+use Nails\Queue\Queue\Queues\DefaultQueue;
 use PHPUnit\Framework\TestCase;
 
 /**
- * @covers \Nails\Queue\Queues\DefaultQueue
+ * @covers \Nails\Queue\Queue\Queues\DefaultQueue
  */
 class DefaultQueueTest extends TestCase
 {

@@ -12,7 +12,7 @@ use Nails\Console\Command\Base;
 use Nails\Factory;
 use Nails\Queue\Constants;
 use Nails\Queue\Interface\Queue;
-use Nails\Queue\Queues\DefaultQueue;
+use Nails\Queue\Queue\Queues\DefaultQueue;
 use Nails\Queue\Resource\Job;
 use Nails\Queue\Resource\Worker;
 use Nails\Queue\Service\Manager;

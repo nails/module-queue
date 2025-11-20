@@ -1,6 +1,6 @@
 <?php
 
-namespace Nails\Queue\Queues;
+namespace Nails\Queue\Queue\Queues;
 
 use Nails\Queue\Interface\Queue;
 use Nails\Queue\Resource\Worker;

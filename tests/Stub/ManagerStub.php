@@ -56,9 +56,14 @@ class ManagerStub extends Manager
     }
 
     /** @inheritDoc */
-    protected function getTimestampString(?DateInterval $sub = null, ?DateInterval $add = null): string
+    protected function getTimestampString(?DateInterval $sub = null, ?DateInterval $add = null, bool $microseconds = false): string
     {
-        return $this->getTimestamp($sub, $add)->format('Y-m-d H:i:s');
+        return $this->getTimestamp($sub, $add)
+            ->format(
+                $microseconds
+                    ? 'Y-m-d H:i:s.u'
+                    : 'Y-m-d H:i:s'
+            );
     }
 
     /** @inheritDoc */
