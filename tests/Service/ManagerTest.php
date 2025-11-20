@@ -4,6 +4,8 @@ namespace Tests\Queue\Service;
 
 use DateInterval;
 use DateTime;
+use Exception;
+use InvalidArgumentException;
 use Nails\Common\Factory\Database\Transaction;
 use Nails\Common\Helper\Model\Where;
 use Nails\Common\Service\Database;
@@ -207,7 +209,7 @@ class ManagerTest extends TestCase
         $manager = $this->makeManager();
 
         // Assert
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(InvalidArgumentException::class);
 
         // Act
         $manager->resolveQueue('nope');
@@ -742,7 +744,7 @@ class ManagerTest extends TestCase
         $ok = $manager
             ->markJobAsFailed(
                 $job,
-                new \Exception('boom')
+                new Exception('boom')
             );
 
         // Assert
@@ -807,7 +809,7 @@ class ManagerTest extends TestCase
         );
 
         // Act
-        $manager->retryJob($job, new \Exception('nope'));
+        $manager->retryJob($job, new Exception('nope'));
 
         // Assert
         // No assertions here; asserted above

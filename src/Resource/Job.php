@@ -2,6 +2,7 @@
 
 namespace Nails\Queue\Resource;
 
+use Nails\Common\Exception\FactoryException;
 use Nails\Common\Model\Base;
 use Nails\Common\Resource\DateTime;
 use Nails\Common\Resource\Entity;
@@ -27,6 +28,9 @@ class Job extends Entity
     public array     $errors;
     public int       $attempts;
 
+    /**
+     * @throws FactoryException
+     */
     public function __construct(array|Entity|stdClass $resource = [], ?Base $model = null)
     {
         $resource->queue = new ($resource->queue)();

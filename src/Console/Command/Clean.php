@@ -100,6 +100,11 @@ class Clean extends Base
         }
     }
 
+    /**
+     * @throws DateInvalidOperationException
+     * @throws ModelException
+     * @throws FactoryException
+     */
     private function rotateOldJobs(): void
     {
         $this->oOutput->writeln('Rotating old jobs:');

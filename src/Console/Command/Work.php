@@ -3,6 +3,7 @@
 namespace Nails\Queue\Console\Command;
 
 use DateInvalidOperationException;
+use DateTime;
 use Nails\Common\Exception\FactoryException;
 use Nails\Common\Exception\ModelException;
 use Nails\Common\Factory\Logger;
@@ -21,6 +22,7 @@ use Symfony\Component\Console\Command\SignalableCommandInterface;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Throwable;
 
 class Work extends Base implements SignalableCommandInterface
 {
@@ -71,6 +73,10 @@ class Work extends Base implements SignalableCommandInterface
         return false;
     }
 
+    /**
+     * @throws ModelException
+     * @throws FactoryException
+     */
     protected function unregisterWorker(): void
     {
         if ($this->worker) {
@@ -112,6 +118,9 @@ class Work extends Base implements SignalableCommandInterface
         return $this;
     }
 
+    /**
+     * @throws FactoryException
+     */
     protected function logln(string $line = ''): self
     {
         return $this->log($line . PHP_EOL);
@@ -124,7 +133,7 @@ class Work extends Base implements SignalableCommandInterface
      */
     protected function setLogFile(): self
     {
-        /** @var \DateTime $now */
+        /** @var DateTime $now */
         $now = Factory::factory('DateTime');
         $this->logger->setFile(sprintf('queue-worker-%s.php', $now->format('Y-m-d')));
         return $this;
@@ -169,7 +178,7 @@ class Work extends Base implements SignalableCommandInterface
                     $setupTimerStart
                 );
 
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 $this->logStringWithTimer(
                     sprintf('<error>error: %s</error>', $e->getMessage()),
                     $setupTimerStart
@@ -236,7 +245,7 @@ class Work extends Base implements SignalableCommandInterface
                         $this->manager->markJobAsComplete($job);
                         $logMessage = '<info>COMPLETE</info>';
 
-                    } catch (\Throwable $e) {
+                    } catch (Throwable $e) {
 
                         $maxRetries   = max(0, (int) $job->task::getMaxRetries());
                         $currentTries = (int) ($job->attempts ?? 0);
@@ -276,7 +285,7 @@ class Work extends Base implements SignalableCommandInterface
                     }
                 }
 
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 $this->logln(sprintf(
                     '<error>Error: %s</error>',
                     $e->getMessage()
@@ -303,7 +312,7 @@ class Work extends Base implements SignalableCommandInterface
                             //  Take the opportunity to refresh the log file path
                             $this->setLogFile();
 
-                        } catch (\Throwable $e) {
+                        } catch (Throwable $e) {
                             $this->logStringWithTimer(
                                 sprintf('<error>error: %s</error>', $e->getMessage()),
                                 $refreshTimerStart
