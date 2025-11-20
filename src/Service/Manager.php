@@ -10,9 +10,13 @@ use Exception;
 use InvalidArgumentException;
 use Nails\Common\Exception\FactoryException;
 use Nails\Common\Exception\ModelException;
+use Nails\Common\Exception\NailsException;
 use Nails\Common\Helper\ArrayHelper;
+use Nails\Common\Helper\Model\Condition;
 use Nails\Common\Helper\Model\Where;
+use Nails\Common\Helper\Model\WhereIn;
 use Nails\Common\Service\Database;
+use Nails\Components;
 use Nails\Config;
 use Nails\Factory;
 use Nails\Queue\Enum\Job\Status;
@@ -20,7 +24,7 @@ use Nails\Queue\Interface\Data;
 use Nails\Queue\Interface\Queue;
 use Nails\Queue\Interface\Task;
 use Nails\Queue\Model;
-use Nails\Queue\Queues;
+use Nails\Queue\Queue\Queues;
 use Nails\Queue\Resource;
 use Random\RandomException;
 use Throwable;
@@ -28,16 +32,25 @@ use Throwable;
 class Manager
 {
     /**
+     * @var Queue[]
+     */
+    protected array $queues = [];
+
+    /**
      * @var array<string, Queue>
      */
     protected array $aliases = [];
 
+    /**
+     * @throws NailsException
+     */
     public function __construct(
         protected Database $database,
         protected Model\Worker $workerModel,
         protected Model\Job $jobModel
     ) {
         $this
+            ->discoverQueues()
             ->addAlias('default', new Queues\DefaultQueue())
             ->addAlias('priority', new Queues\PriorityQueue());
     }
@@ -69,6 +82,40 @@ class Manager
         }
 
         throw new InvalidArgumentException(sprintf('Invalid queue "%s"', $alias));
+    }
+
+    /**
+     * Automatically discovers Queues in the Vendor/Queue/Queues/* namespace
+     *
+     * @throws NailsException
+     */
+    protected function discoverQueues(): self
+    {
+        $this->queues = [];
+
+        foreach (Components::available() as $component) {
+            $classes = $component
+                ->findClasses('Queue\\Queues')
+                ->whichImplement(Queue::class)
+                ->whichCanBeInstantiated();
+
+            foreach ($classes as $class) {
+                $this->queues[] = new $class();
+            }
+
+        }
+
+        return $this;
+    }
+
+    /**
+     * Returns discovered queues
+     *
+     * @return Queue[]
+     */
+    public function getQueues(): array
+    {
+        return $this->queues;
     }
 
     /**
@@ -367,7 +414,7 @@ class Manager
             Status::RUNNING,
             [
                 'worker_id' => $worker->id,
-                'started'   => $this->getTimestampString(),
+                'started'   => $this->getTimestampString(microseconds: true),
             ]
         );
     }
@@ -386,7 +433,7 @@ class Manager
             Status::COMPLETE,
             [
                 'worker_id' => null,
-                'finished'  => $this->getTimestampString(),
+                'finished'  => $this->getTimestampString(microseconds: true),
             ]
         );
     }
@@ -406,7 +453,7 @@ class Manager
             Status::FAILED,
             [
                 'worker_id' => null,
-                'finished'  => $this->getTimestampString(),
+                'finished'  => $this->getTimestampString(microseconds: true),
                 'errors'    => json_encode($errors),
             ]
         );
@@ -422,12 +469,14 @@ class Manager
      * @throws RandomException
      * @throws Exception
      */
-    public function retryJob(Resource\Job $job, Throwable $error): Resource\Job
+    public function retryJob(Resource\Job $job, ?Throwable $error = null): Resource\Job
     {
         $nextAttempt = ($job->attempts ?? 0) + 1;
         $delay       = $this->computeBackoffSeconds($nextAttempt);
         $availableAt = $this->getTimestamp(add: new DateInterval('PT' . $delay . 'S'));
-        $errors      = $this->appendError($job, $error);
+        $errors      = $error
+            ? $this->appendError($job, $error)
+            : $job->errors;
 
         $this->jobModel->update(
             $job->id,
@@ -444,6 +493,254 @@ class Manager
 
         /** @var Resource\Job */
         return $this->jobModel->getById($job->id);
+    }
+
+    /**
+     * Count the number of jobs, optionally filtered by queue and/or task and/or statuses
+     *
+     * @throws ModelException
+     */
+    public function countJobs(array $data = [], array $queues = [], array $tasks = [], array $statuses = []): int
+    {
+        if ($queues) {
+            $data[] = new WhereIn('queue', array_map(function ($queue) {
+                return $this->resolveQueue($queue)::class;
+            }, $queues));
+        }
+
+        if ($tasks) {
+            $data[] = new WhereIn('task', $tasks);
+        }
+
+        if ($statuses) {
+            $data[] = new WhereIn('status', array_map(function (Status $status) {
+                return $status->value;
+            }, $statuses));
+        }
+
+        return $this->jobModel->countAll($data);
+    }
+
+    /**
+     * Count the number of pending jobs, optionally filtered by queue and/or task
+     *
+     * @throws ModelException
+     */
+    public function countPendingJobs(array $data = [], array $queues = [], array $tasks = []): int
+    {
+        return $this->countJobs(
+            data: array_merge($data, [new Condition('`available_at` IS NULL OR `available_at` <= NOW()')]),
+            queues: $queues,
+            tasks: $tasks,
+            statuses: [Status::PENDING]
+        );
+    }
+
+    /**
+     * Count the number of scheduled  jobs, optionally filtered by queue and/or task
+     *
+     * @throws ModelException
+     */
+    public function countScheduledJobs(array $data = [], array $queues = [], array $tasks = []): int
+    {
+        return $this->countJobs(
+            data: array_merge($data, [new Condition('`available_at` IS NOT NULL AND `available_at` > NOW()')]),
+            queues: $queues,
+            tasks: $tasks,
+            statuses: [Status::PENDING]
+        );
+    }
+
+    /**
+     * Count the number of running jobs, optionally filtered by queue and/or task
+     *
+     * @throws ModelException
+     */
+    public function countRunningJobs(array $data = [], array $queues = [], array $tasks = []): int
+    {
+        return $this->countJobs(
+            data: $data,
+            queues: $queues,
+            tasks: $tasks,
+            statuses: [Status::RUNNING]
+        );
+    }
+
+    /**
+     * Count the number of complete jobs, optionally filtered by queue and/or task
+     *
+     * @throws ModelException
+     */
+    public function countCompleteJobs(array $data = [], array $queues = [], array $tasks = []): int
+    {
+        return $this->countJobs(
+            data: $data,
+            queues: $queues,
+            tasks: $tasks,
+            statuses: [Status::COMPLETE]
+        );
+    }
+
+    /**
+     * Count the number of failed jobs, optionally filtered by queue and/or task
+     *
+     * @throws ModelException
+     */
+    public function countFailedJobs(array $data = [], array $queues = [], array $tasks = []): int
+    {
+        return $this->countJobs(
+            data: $data,
+            queues: $queues,
+            tasks: $tasks,
+            statuses: [Status::FAILED]
+        );
+    }
+
+    /**
+     * Compute the average latency for a given set of queues over a period of time extending back from now,
+     * defaults to all queues if no queues are provided.
+     *
+     * @throws DateInvalidOperationException
+     * @throws FactoryException
+     * @throws ModelException
+     */
+    public function getQueueAverageLatency(DateInterval $interval, array $queues = []): float
+    {
+        [$then, $now, $queues] = $this->getQueueMetricConfigs($interval, $queues);
+
+        return (float) $this->database
+            ->query(
+                sprintf(
+                    <<<EOT
+                    SELECT
+                        AVG(UNIX_TIMESTAMP(started) - UNIX_TIMESTAMP(available_at)) latency
+                        FROM `%s` WHERE
+                            `queue` IN (%s)
+                            AND `started` IS NOT NULL
+                            AND `started` BETWEEN ? AND ?
+                    EOT,
+                    $this->jobModel->getTableName(),
+                    implode(', ', array_fill(0, count($queues), '?')),
+                ),
+                [
+                    ...$queues,
+                    $then->format('Y-m-d H:i:s'),
+                    $now->format('Y-m-d H:i:s'),
+                ]
+            )
+            ->first_row()
+            ->latency;
+    }
+
+    /**
+     * Compute the average duration of jobs for a given set of queues over a period of time extending back from now,
+     * defaults to all queues if no queues are provided
+     *
+     * @throws DateInvalidOperationException
+     * @throws FactoryException
+     * @throws ModelException
+     */
+    public function getQueueAverageDuration(DateInterval $interval, array $queues = []): float
+    {
+        [$then, $now, $queues] = $this->getQueueMetricConfigs($interval, $queues);
+
+        $statuses = [
+            Status::COMPLETE->value,
+            Status::FAILED->value,
+        ];
+
+        return (float) $this->database
+            ->query(
+                sprintf(
+                    <<<EOT
+                    SELECT
+                        AVG(UNIX_TIMESTAMP(started) - UNIX_TIMESTAMP(finished)) duration
+                        FROM `%s` WHERE
+                            `queue` IN (%s)
+                            AND `status` IN (%s) 
+                            AND `started` IS NOT NULL
+                            AND `finished` IS NOT NULL
+                            AND `started` BETWEEN ? AND ?
+                    EOT,
+                    $this->jobModel->getTableName(),
+                    implode(', ', array_fill(0, count($queues), '?')),
+                    implode(', ', array_fill(0, count($statuses), '?')),
+                ),
+                [
+                    ...$queues,
+                    ...$statuses,
+                    $then->format('Y-m-d H:i:s'),
+                    $now->format('Y-m-d H:i:s'),
+                ]
+            )
+            ->first_row()
+            ->duration;
+    }
+
+    /**
+     * Compute the throughput for a given set of queues over a period of time extending back from now,
+     * defaults to all queues if no queues are provided
+     *
+     * @throws DateInvalidOperationException
+     * @throws FactoryException
+     * @throws ModelException
+     */
+    public function getQueueThroughput(DateInterval $interval, array $queues = []): int
+    {
+        [$then, $now, $queues] = $this->getQueueMetricConfigs($interval, $queues);
+
+        $statuses = [
+            Status::COMPLETE->value,
+            Status::FAILED->value,
+        ];
+
+        return (int) $this->database
+            ->query(
+                sprintf(
+                    <<<EOT
+                    SELECT
+                        COUNT(*) count
+                        FROM `%s` WHERE
+                            `queue` IN (%s)
+                            AND `status` IN (%s) 
+                            AND `finished` IS NOT NULL
+                            AND `finished` BETWEEN ? AND ?
+                    EOT,
+                    $this->jobModel->getTableName(),
+                    implode(', ', array_fill(0, count($queues), '?')),
+                    implode(', ', array_fill(0, count($statuses), '?')),
+                ),
+                [
+                    ...$queues,
+                    ...$statuses,
+                    $then->format('Y-m-d H:i:s'),
+                    $now->format('Y-m-d H:i:s'),
+                ]
+            )
+            ->first_row()
+            ->count;
+    }
+
+    /**
+     * Compute common values for the getQueue* methods
+     *
+     * @throws DateInvalidOperationException
+     * @throws FactoryException
+     */
+    protected function getQueueMetricConfigs(DateInterval $interval, array $queues = []): array
+    {
+        $now  = $this->getTimestamp();
+        $then = (clone $now)->sub($interval);
+
+        //  Normalise queues
+        $queues = array_map(
+            fn(Queue $queue) => $queue::class,
+            empty($queues)
+                ? $this->getQueues()
+                : array_map(fn($queue) => $this->resolveQueue($queue), $queues)
+        );
+
+        return [$then, $now, $queues];
     }
 
     /**
@@ -545,8 +842,13 @@ class Manager
      * @throws DateInvalidOperationException
      * @throws FactoryException
      */
-    protected function getTimestampString(?DateInterval $sub = null, ?DateInterval $add = null): string
+    protected function getTimestampString(?DateInterval $sub = null, ?DateInterval $add = null, bool $microseconds = false): string
     {
-        return $this->getTimestamp($sub, $add)->format('Y-m-d H:i:s');
+        return $this->getTimestamp($sub, $add)
+            ->format(
+                $microseconds
+                    ? 'Y-m-d H:i:s.u'
+                    : 'Y-m-d H:i:s'
+            );
     }
 }

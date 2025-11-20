@@ -16,8 +16,8 @@ class Data implements Interface\Data
         return $this->data;
     }
 
-    public function toJson(): string
+    public function toJson(int $jsonFlags = 0): string
     {
-        return json_encode($this->data);
+        return json_encode($this->data, $jsonFlags);
     }
 }

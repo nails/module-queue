@@ -77,8 +77,8 @@ interface Queue
 ```
 
 Built-in queues:
-- `Nails\Queue\Queues\DefaultQueue`
-- `Nails\Queue\Queues\PriorityQueue`
+- `Nails\Queue\Queue\Queues\DefaultQueue`
+- `Nails\Queue\Queue\Queues\PriorityQueue`
 
 These are registered under the aliases `default` and `priority` respectively.
 
@@ -163,6 +163,8 @@ Notes:
 
 ### 1) Define a Queue (optional)
 If you need custom startup or periodic maintenance, implement your own queue class and register an alias at bootstrap.
+
+You can place your own Queues wherever you like, but for auto-discovery you should place them in the `App\Queue\Queues` namespace.
 
 ```php
 namespace App\Queue\Queues;
@@ -332,12 +334,37 @@ This command auto registers itself into cron and runs every 5 minutes.
 
 ## Daemonising the worker (supervisord example)
 
-`supervisord` keeps your worker running and restarts it on failure.
+Keep the queue proccess running in the background (with auto-restart) using a process manager. Common examples:
 
+### `systemd`
+`/etc/systemd/system/nails-queue.service`
+```
+[Unit]
+Description=Nails Queue Worker
+After=network.target
+
+[Service]
+User=www-data
+Restart=always
+ExecStart=/bin/bash -c 'cd /path/to/project && /path/to/nails queue:work --queue="default" --queue="priority"'
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Commands:
+```
+systemctl daemon-reload
+systemctl enable nails-queue
+systemctl start nails-queue
+systemctl status nails-queue
+```
+
+### `supervisord`
 `/etc/supervisor/conf.d/queue-worker.conf`:
 ```
-[program:queue-worker]
-command=/usr/bin/php /path/to/nails/nails queue:work --queue=default --queue=priority
+[program:nails-queue]
+command=/bin/bash -c 'cd /path/to/project && /path/to/nails queue:work --queue="default" --queue="priority"'
 process_name=%(program_name)s_%(process_num)02d
 numprocs=2
 user=www-data
@@ -349,7 +376,7 @@ stopsignal=TERM
 startretries=3
 startsecs=5
 redirect_stderr=true
-stdout_logfile=/var/log/queue-worker.log
+stdout_logfile=/var/log/nails-queue.log
 stdout_logfile_maxbytes=20MB
 stdout_logfile_backups=5
 environment=APP_ENV="PRODUCTION"
@@ -359,7 +386,7 @@ Commands:
 ```
 supervisorctl reread
 supervisorctl update
-supervisorctl status queue-worker:*
+supervisorctl status nails-queue:*
 ```
 
 Tips:
