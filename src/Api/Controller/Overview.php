@@ -176,7 +176,7 @@ class Overview extends Base
             ],
             [
                 'label' => 'Oldest queued age',
-                'value' => (int) $oldestJob->available_at->format('U'),
+                'value' => ((int) $oldestJob?->available_at?->format('U')) ?: null,
                 'hint'  => 'The age of the oldest queued job',
                 'type'  => 'age',
             ],
