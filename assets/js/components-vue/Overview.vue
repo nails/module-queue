@@ -19,11 +19,12 @@
                 <div class="kpis">
                     <KPI
                         v-for="(kpi, i) in kpis"
-                        :key="`kpi-${i}`"
+                        :key="kpi.slug || kpi.label || `kpi-${i}`"
                         :label="kpi.label"
                         :value="kpi.value"
                         :hint="kpi.hint || ''"
                         :type="kpi.type || ''"
+                        :now-ts="nowTs"
                     />
                 </div>
                 <h2>Queues</h2>

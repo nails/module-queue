@@ -45,6 +45,11 @@ export default {
             required: false,
             default: null
         },
+        nowTs: {
+            type: Number,
+            required: false,
+            default: () => Math.floor(Date.now() / 1000)
+        },
         hint: {
             type: String,
             default: '',
@@ -57,13 +62,15 @@ export default {
         }
     },
     data() {
-        return {
-            tickTimer: null,
-            nowTs: Math.floor(Date.now() / 1000),
-        }
+        return {}
     },
     computed: {
         formattedValue() {
+            //  Early return for no data
+            if (this.value === null || this.value === undefined) {
+                return '—';
+            }
+
             const type = (this.type || '').toLowerCase();
             if (type === 'number') {
                 return this.formatNumber(this.value);
@@ -80,23 +87,11 @@ export default {
                 return this.formatAgeSeconds(secs);
             }
             // default passthrough
-            if (this.value === null || this.value === undefined) return '—';
             return String(this.value);
         }
     },
-    created() {
-        // Only tick if age; keep cheap for others
-        if ((this.type || '').toLowerCase() === 'age') {
-            this.tickTimer = setInterval(() => {
-                this.nowTs = Math.floor(Date.now() / 1000);
-            }, 1000);
-        }
-    },
-    beforeUnmount() {
-        if (this.tickTimer) {
-            clearInterval(this.tickTimer);
-        }
-    },
+    created() {},
+    beforeUnmount() {},
     methods: {
         formatNumber(v) {
             if (v === null || v === undefined) return '—';
