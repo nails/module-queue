@@ -26,6 +26,7 @@ class Migration0 implements Interfaces\Database\Migration
                 UNIQUE KEY `token` (`token`),
                 KEY `created_by` (`created_by`),
                 KEY `modified_by` (`modified_by`),
+                KEY `idx_heartbeat` (`heartbeat`),
                 CONSTRAINT `{{NAILS_DB_PREFIX}}queue_worker_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `{{NAILS_DB_PREFIX}}user` (`id`) ON DELETE SET NULL,
                 CONSTRAINT `{{NAILS_DB_PREFIX}}queue_worker_ibfk_2` FOREIGN KEY (`modified_by`) REFERENCES `{{NAILS_DB_PREFIX}}user` (`id`) ON DELETE SET NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -54,6 +55,11 @@ class Migration0 implements Interfaces\Database\Migration
                 KEY `modified_by` (`modified_by`),
                 KEY `worker_id` (`worker_id`),
                 KEY `status` (`status`,`queue`,`available_at`,`id`),
+                KEY `idx_job_ready` (`status`, `worker_id`, `queue`, `available_at`, `id`),
+                KEY `idx_queue_started` (`queue`, `started`),
+                KEY `idx_queue_finished_status` (`queue`, `finished`, `status`),
+                KEY `idx_task` (`task`),
+                KEY `idx_status_available_at` (`status`, `available_at`),
                 CONSTRAINT `{{NAILS_DB_PREFIX}}queue_job_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `{{NAILS_DB_PREFIX}}user` (`id`) ON DELETE SET NULL,
                 CONSTRAINT `{{NAILS_DB_PREFIX}}queue_job_ibfk_2` FOREIGN KEY (`modified_by`) REFERENCES `{{NAILS_DB_PREFIX}}user` (`id`) ON DELETE SET NULL,
                 CONSTRAINT `{{NAILS_DB_PREFIX}}queue_job_ibfk_3` FOREIGN KEY (`worker_id`) REFERENCES `{{NAILS_DB_PREFIX}}queue_worker` (`id`) ON DELETE SET NULL
