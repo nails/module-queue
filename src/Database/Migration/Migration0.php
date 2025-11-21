@@ -41,7 +41,7 @@ class Migration0 implements Interfaces\Database\Migration
                 `data` json DEFAULT NULL,
                 `status` enum('PENDING','RUNNING','COMPLETE','FAILED') NOT NULL,
                 `worker_id` int unsigned DEFAULT NULL,
-                `available_at` datetime(4) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `available_at` datetime(4) NOT NULL DEFAULT CURRENT_TIMESTAMP(4),
                 `started` datetime(4) DEFAULT NULL,
                 `finished` datetime(4) DEFAULT NULL,
                 `errors` JSON NOT NULL,
