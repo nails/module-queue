@@ -41,8 +41,9 @@ export default {
             required: true
         },
         value: {
-            type: Number | String,
-            required: true
+            type: [Number, String],
+            required: false,
+            default: null
         },
         hint: {
             type: String,
