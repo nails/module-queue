@@ -654,7 +654,7 @@ class Manager
                 sprintf(
                     <<<EOT
                     SELECT
-                        AVG(UNIX_TIMESTAMP(started) - UNIX_TIMESTAMP(finished)) duration
+                        AVG(UNIX_TIMESTAMP(finished) - UNIX_TIMESTAMP(started)) duration
                         FROM `%s` WHERE
                             `queue` IN (%s)
                             AND `status` IN (%s) 
