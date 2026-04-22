@@ -23,6 +23,7 @@ use Nails\Queue\Service\Manager;
 use Nails\Queue\Tasks\DoNothing as DoNothingTask;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Tests\Queue\Stub\DatabaseStub;
 use Tests\Queue\Stub\ManagerStub;
 
 /**
@@ -579,13 +580,11 @@ class ManagerTest extends TestCase
     public function test_get_next_job_queries_and_marks_running()
     {
         // Arrange
-        /** @var Database&MockObject $database */
+        /** @var DatabaseStub&MockObject $database */
         $database = $this->makeMock(
-            class: Database::class,
+            class: DatabaseStub::class,
             onlyMethods: [
                 'transaction',
-            ],
-            addMethods: [
                 'query',
             ],
         );
@@ -680,13 +679,11 @@ class ManagerTest extends TestCase
     public function test_get_next_job_returns_null_when_no_rows()
     {
         // Arrange
-        /** @var Database&MockObject $database */
+        /** @var DatabaseStub&MockObject $database */
         $database = $this->makeMock(
-            class: Database::class,
+            class: DatabaseStub::class,
             onlyMethods: [
                 'transaction',
-            ],
-            addMethods: [
                 'query',
             ],
         );
@@ -1500,9 +1497,8 @@ class ManagerTest extends TestCase
 
         /** @var Database&MockObject $db */
         $db = $this->makeMock(
-            class: Database::class,
-            onlyMethods: [],
-            addMethods: [
+            class: DatabaseStub::class,
+            onlyMethods: [
                 'query',
             ],
         );
@@ -1563,9 +1559,8 @@ class ManagerTest extends TestCase
 
         /** @var Database&MockObject $db */
         $db = $this->makeMock(
-            class: Database::class,
-            onlyMethods: [],
-            addMethods: [
+            class: DatabaseStub::class,
+            onlyMethods: [
                 'query',
             ],
         );
@@ -1635,9 +1630,8 @@ class ManagerTest extends TestCase
 
         /** @var Database&MockObject $db */
         $db = $this->makeMock(
-            class: Database::class,
-            onlyMethods: [],
-            addMethods: [
+            class: DatabaseStub::class,
+            onlyMethods: [
                 'query',
             ],
         );
