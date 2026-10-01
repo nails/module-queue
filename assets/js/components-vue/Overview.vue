@@ -88,13 +88,18 @@
                                 <th>Token</th>
                                 <th>Queues</th>
                                 <th>Uptime</th>
+                                <th>Heartbeat</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-if="workers.length === 0">
                                 <td colspan="5" class="no-data">No Workers Registered</td>
                             </tr>
-                            <tr v-for="(worker, wi) in workers" :key="`worker-${worker.id}-${wi}`">
+                            <tr
+                                v-for="(worker, wi) in workers"
+                                :key="`worker-${worker.id}-${wi}`"
+                                :class="{ 'is-stale': worker.stale }"
+                            >
                                 <td class="text-center">{{ worker.id }}</td>
                                 <td><code>{{ worker.token || '—' }}</code></td>
                                 <td>
@@ -106,6 +111,13 @@
                                 <td>
                                     {{ ageFrom(worker.created?.unix) }}
                                     <small v-if="worker.created?.user" style="display:block;">Created: {{ worker.created.user }}</small>
+                                </td>
+                                <td>
+                                    <div>
+                                        {{ ageFrom(worker.heartbeat?.unix) }} ago
+                                        <span v-if="worker.stale" class="stale">Stale</span>
+                                    </div>
+                                    <small v-if="worker.heartbeat?.user" style="display:block;">Heartbeat: {{ worker.heartbeat.user }}</small>
                                 </td>
                             </tr>
                         </tbody>
@@ -565,6 +577,23 @@ export default {
     }
 
     table {
+        tr.is-stale {
+            background: #fcf8e3;
+        }
+
+        .stale {
+            display: inline-block;
+            margin-left: 0.4rem;
+            padding: 0.05rem 0.4rem;
+            font-size: 0.75em;
+            font-weight: 600;
+            color: #8a6d3b;
+            background: #fcf8e3;
+            border: 1px solid #faebcc;
+            border-radius: 3px;
+            vertical-align: middle;
+        }
+
         .alert {
             padding: 0.25rem;
             margin: 0 0 0.25rem 0;

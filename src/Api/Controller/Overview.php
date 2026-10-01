@@ -273,6 +273,7 @@ class Overview extends Base
     }
 
     /**
+     * @throws FactoryException
      * @throws ModelException
      */
     protected function getWorkers(): array
@@ -280,21 +281,30 @@ class Overview extends Base
         $workers = $this->workerModel->getAll();
 
         return array_map(
-            fn(Resource\Worker $worker) => [
-                'id'        => $worker->id,
-                'token'     => $worker->token,
-                'queues'    => $worker->queues,
-                'created'   => [
-                    'unix' => (int) $worker->created->format('U'),
-                    'user' => $worker->created->formatted,
-                ],
-                'heartbeat' => [
-                    'unix' => (int) $worker->heartbeat->format('U'),
-                    'user' => $worker->heartbeat->formatted,
-                ],
-            ],
+            fn(Resource\Worker $worker) => $this->mapWorker($worker),
             $workers,
         );
+    }
+
+    /**
+     * @throws FactoryException
+     */
+    protected function mapWorker(Resource\Worker $worker): array
+    {
+        return [
+            'id'        => $worker->id,
+            'token'     => $worker->token,
+            'queues'    => $worker->queues,
+            'created'   => [
+                'unix' => (int) $worker->created->format('U'),
+                'user' => $worker->created->formatted,
+            ],
+            'heartbeat' => [
+                'unix' => (int) $worker->heartbeat->format('U'),
+                'user' => $worker->heartbeat->formatted,
+            ],
+            'stale'     => $worker->isStale(),
+        ];
     }
 
     /**
