@@ -9,8 +9,7 @@ class Package implements Exclusion
     public function hidden(): array
     {
         return [
-            NAILS_DB_PREFIX . 'queue_job',
-            NAILS_DB_PREFIX . 'queue_worker',
+            '/^' . preg_quote(NAILS_DB_PREFIX, '/') . 'queue_/',
         ];
     }
 
