@@ -119,6 +119,83 @@ class Manager
     }
 
     /**
+     * Discovered queues with no live worker.
+     *
+     * This is the check behind the admin dashboard alert. No discovered queues
+     * means nothing to report. A worker counts when its heartbeat is still
+     * inside QUEUE_WORKER_HEARTBEAT_STALE and its registered queues include
+     * the queue class.
+     *
+     * @return Queue[]
+     * @throws FactoryException
+     * @throws ModelException
+     */
+    public function unworkedQueues(): array
+    {
+        $queues = $this->getQueues();
+        if ($queues === []) {
+            return [];
+        }
+
+        $covered = $this->coveredQueueClasses();
+        if ($covered === []) {
+            return $queues;
+        }
+
+        $unworked = [];
+
+        foreach ($queues as $queue) {
+            if (!isset($covered[$queue::class])) {
+                $unworked[$queue::class] = $queue;
+            }
+        }
+
+        return array_values($unworked);
+    }
+
+    /**
+     * Whether a live worker is registered for this queue.
+     *
+     * A worker counts when its heartbeat is still inside QUEUE_WORKER_HEARTBEAT_STALE
+     * and it was started for this queue class. A discovered queue is processed
+     * exactly when {@see unworkedQueues()} leaves it out.
+     *
+     * @throws FactoryException
+     * @throws InvalidArgumentException
+     * @throws ModelException
+     */
+    public function isProcessed(Queue|string $queue): bool
+    {
+        return isset($this->coveredQueueClasses()[$this->resolveQueue($queue)::class]);
+    }
+
+    /**
+     * Class names listed by a worker whose heartbeat is still fresh.
+     *
+     * @return array<string, true>
+     * @throws FactoryException
+     * @throws ModelException
+     */
+    private function coveredQueueClasses(): array
+    {
+        $covered = [];
+
+        foreach ($this->workerModel->getAll() as $worker) {
+            if (!$worker instanceof Resource\Worker || $worker->isStale()) {
+                continue;
+            }
+
+            foreach ($worker->queues as $workerQueue) {
+                if (is_string($workerQueue) && $workerQueue !== '') {
+                    $covered[$workerQueue] = true;
+                }
+            }
+        }
+
+        return $covered;
+    }
+
+    /**
      * Registers a new worker to process the specified queues and returns the persisted worker resource.
      *
      * @param (string|Queue)[] $queues

@@ -152,11 +152,16 @@ Manager::unregisterWorker(Resource\Worker $worker): void
 Manager::deleteStaleWorkers(): Resource\Worker[]
 Manager::resetStuckJobs(): Job[]
 Manager::rotateOldJobs(): Job[]
+
+// Same liveness check as the admin dashboard alert
+Manager::unworkedQueues(): Queue[]
+Manager::isProcessed(Queue|string $queue): bool
 ```
 
 Notes:
 - Passing `null` or `'default'` as the queue argument uses the default queue alias; you can also pass a fully-qualified queue class name (FQCN) or an instance.
 - FIFO is approximated by selecting the smallest available `id` where `available_at <= NOW()`.
+- `unworkedQueues()` is the list shown by the admin dashboard alert. A worker counts when its heartbeat is newer than `QUEUE_WORKER_HEARTBEAT_STALE` (300 seconds by default) and it was started for that queue class. `isProcessed()` is true when a live worker lists the queue. For a discovered queue, that is the opposite of appearing in `unworkedQueues()`.
 
 
 ## Creating user-land queues and jobs
