@@ -25,6 +25,7 @@ use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Tests\Queue\Stub\DatabaseStub;
 use Tests\Queue\Stub\ManagerStub;
+use Tests\Queue\Stub\SideQueue;
 
 /**
  * Tests the Queue Manager service behaviours.
@@ -1685,5 +1686,81 @@ class ManagerTest extends TestCase
 
         // Assert
         self::assertSame(17, $value);
+    }
+
+    /**
+     * A queue is unworked when no live worker lists its class. A stale heartbeat does not count.
+     *
+     * @covers \Nails\Queue\Service\Manager::unworkedQueues
+     * @covers \Nails\Queue\Service\Manager::isProcessed
+     */
+    public function test_unworked_queues_ignore_stale_workers(): void
+    {
+        /** @var WorkerModel&MockObject $workerModel */
+        $workerModel = $this->makeMock(WorkerModel::class, onlyMethods: ['getAll']);
+        $workerModel->expects($this->atLeastOnce())->method('getAll')->willReturn([
+            $this->makeWorkerResource([
+                'id'        => 1,
+                'queues'    => json_encode([DefaultQueue::class]),
+                'heartbeat' => '2099-01-01 00:00:00',
+            ]),
+            $this->makeWorkerResource([
+                'id'        => 2,
+                'queues'    => json_encode([PriorityQueue::class]),
+                'heartbeat' => '2000-01-01 00:00:00',
+            ]),
+        ]);
+
+        $manager  = $this->makeManager(workerModel: $workerModel);
+        $unworked = array_map(static fn($queue) => $queue::class, $manager->unworkedQueues());
+
+        self::assertNotContains(DefaultQueue::class, $unworked);
+        self::assertContains(PriorityQueue::class, $unworked);
+        self::assertTrue($manager->isProcessed('default'));
+        self::assertTrue($manager->isProcessed(DefaultQueue::class));
+        self::assertFalse($manager->isProcessed('priority'));
+        self::assertFalse($manager->isProcessed(PriorityQueue::class));
+    }
+
+    /**
+     * With no live workers, every discovered queue is unworked.
+     *
+     * @covers \Nails\Queue\Service\Manager::unworkedQueues
+     * @covers \Nails\Queue\Service\Manager::isProcessed
+     */
+    public function test_no_live_workers_marks_every_discovered_queue_unworked(): void
+    {
+        /** @var WorkerModel&MockObject $workerModel */
+        $workerModel = $this->makeMock(WorkerModel::class, onlyMethods: ['getAll']);
+        $workerModel->expects($this->atLeastOnce())->method('getAll')->willReturn([]);
+
+        $manager  = $this->makeManager(workerModel: $workerModel);
+        $unworked = array_map(static fn($queue) => $queue::class, $manager->unworkedQueues());
+
+        self::assertContains(DefaultQueue::class, $unworked);
+        self::assertContains(PriorityQueue::class, $unworked);
+        self::assertFalse($manager->isProcessed('default'));
+    }
+
+    /**
+     * A queue outside discovery is processed only when a live worker lists it.
+     *
+     * @covers \Nails\Queue\Service\Manager::isProcessed
+     */
+    public function test_undiscovered_queue_follows_the_live_worker(): void
+    {
+        /** @var WorkerModel&MockObject $workerModel */
+        $workerModel = $this->makeMock(WorkerModel::class, onlyMethods: ['getAll']);
+        $workerModel->expects($this->atLeastOnce())->method('getAll')->willReturn([
+            $this->makeWorkerResource([
+                'queues'    => json_encode([SideQueue::class]),
+                'heartbeat' => '2099-01-01 00:00:00',
+            ]),
+        ]);
+
+        $manager = $this->makeManager(workerModel: $workerModel);
+
+        self::assertTrue($manager->isProcessed(new SideQueue()));
+        self::assertFalse($manager->isProcessed(DefaultQueue::class));
     }
 }
