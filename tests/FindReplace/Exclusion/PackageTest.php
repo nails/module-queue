@@ -18,8 +18,7 @@ class PackageTest extends TestCase
     {
         self::assertSame(
             [
-                NAILS_DB_PREFIX . 'queue_job',
-                NAILS_DB_PREFIX . 'queue_worker',
+                '/^' . preg_quote(NAILS_DB_PREFIX, '/') . 'queue_/',
             ],
             (new Package())->hidden()
         );
