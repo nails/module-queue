@@ -4,15 +4,3 @@ const NAILS_COMMON_PATH = './';
 const NAILS_CI_SYSTEM_PATH = NAILS_COMMON_PATH . 'vendor/pocketarc/codeigniter/system/';
 const BASEPATH = NAILS_CI_SYSTEM_PATH;
 const NAILS_DB_PREFIX = 'nails_';
-
-if (!interface_exists(\Nails\FindReplace\Interfaces\Exclusion::class, false)) {
-    foreach ([
-        dirname(__DIR__) . '/vendor/nails/common/src/FindReplace/Interfaces/Exclusion.php',
-        dirname(__DIR__, 2) . '/common/src/FindReplace/Interfaces/Exclusion.php',
-    ] as $nailsFindReplaceExclusion) {
-        if (is_file($nailsFindReplaceExclusion)) {
-            require_once $nailsFindReplaceExclusion;
-            break;
-        }
-    }
-}
