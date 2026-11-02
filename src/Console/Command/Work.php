@@ -26,6 +26,11 @@ use Throwable;
 
 class Work extends Base implements SignalableCommandInterface
 {
+    /**
+     * The longest, in milliseconds, an idle worker will wait between polls
+     */
+    protected const MAX_WAIT_TIME = 5000;
+
     protected Logger   $logger;
     protected Database $database;
     protected Manager  $manager;
@@ -250,12 +255,12 @@ class Work extends Base implements SignalableCommandInterface
                         $maxRetries   = max(0, (int) $job->task::getMaxRetries());
                         $currentTries = (int) ($job->attempts ?? 0);
                         if ($currentTries < $maxRetries) {
-                            $this->manager->retryJob($job, $e);
+                            $retried    = $this->manager->retryJob($job, $e);
                             $logMessage = sprintf(
                                 '<comment>RETRY %d/%d</comment> (next at %s)',
                                 $currentTries + 1,
                                 $maxRetries,
-                                $job->available_at->format('H:i:s')
+                                $retried->available_at->format('H:i:s')
                             );
                         } else {
                             $logMessage = '<info>FAILED</info>';
@@ -283,6 +288,12 @@ class Work extends Base implements SignalableCommandInterface
                         usleep($chunk * 1000);
                         $remainingMs -= $chunk;
                     }
+
+                    // Back off while idle; the wait resets once a job has been run
+                    $waitTime = min(
+                        $waitTime * 2,
+                        max(static::MAX_WAIT_TIME, Config::get('QUEUE_WORKER_WAIT_TIME', 500))
+                    );
                 }
 
             } catch (Throwable $e) {
