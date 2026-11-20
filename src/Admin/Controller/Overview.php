@@ -25,6 +25,7 @@ class Overview extends Base
             $navGroup = Factory::factory('Nav', Constants::MODULE_SLUG);
             $navGroup
                 ->setLabel('Queue')
+                ->setIcon('fa-layer-group')
                 ->addAction('Overview');
         }
 
