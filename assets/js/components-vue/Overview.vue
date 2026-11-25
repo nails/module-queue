@@ -29,8 +29,8 @@
                 </div>
                 <h2>Queues</h2>
                 <div class="table-responsive">
-                    <table>
-                        <thead>
+                    <table class="table table-striped table-hover">
+                        <thead class="table-dark">
                             <tr>
                                 <th>Queue</th>
                                 <th>Jobs</th>
@@ -59,7 +59,7 @@
                                         :class="`alert-${job.class || 'default'}`"
                                     >
                                         <span>{{ job.label }}</span>
-                                        <span class="badge">{{ formatNumber(job.value) }}</span>
+                                        <span class="badge" :class="`badge-${job.class || 'default'}`">{{ formatNumber(job.value) }}</span>
                                     </div>
                                 </td>
                                 <td
@@ -81,8 +81,8 @@
                 </div>
                 <h2>Workers</h2>
                 <div class="table-responsive">
-                    <table>
-                        <thead>
+                    <table class="table table-striped table-hover">
+                        <thead class="table-dark">
                             <tr>
                                 <th class="text-center">ID</th>
                                 <th>Token</th>
@@ -125,8 +125,8 @@
                 </div>
                 <h2>Failed Jobs</h2>
                 <div class="table-responsive">
-                    <table>
-                        <thead>
+                    <table class="table table-striped table-hover">
+                        <thead class="table-dark">
                             <tr>
                                 <th class="text-center">ID</th>
                                 <th>Queue</th>
@@ -595,21 +595,21 @@ export default {
         }
 
         .alert {
-            padding: 0.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            padding: 0.25rem 0.5rem;
             margin: 0 0 0.25rem 0;
 
-            &-default {
-                background: #efefef;
-                border-color: #e3e3e3;
-                color: #6a6a6a;
-            }
-
-            .badge {
-                float: right;
-                position: relative;
-                top: 3px;
+            &:last-child {
+                margin-bottom: 0;
             }
         }
+    }
+
+    h2 {
+        margin: 1.5rem 0 0.75rem;
     }
 }
 </style>
